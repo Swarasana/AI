@@ -31,15 +31,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    file_vals = dotenv_values(str(ENV_PATH))
-    supabase_url = file_vals.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
-    supabase_key = file_vals.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
-    supabase_anon = file_vals.get("SUPABASE_ANON_KEY") or os.environ.get("SUPABASE_ANON_KEY")
-    gemini_key = file_vals.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
-
-    return Settings(
-        SUPABASE_URL=supabase_url,
-        SUPABASE_KEY=supabase_key,
-        SUPABASE_ANON_KEY=supabase_anon,
-        GEMINI_API_KEY=gemini_key,
-    )
+    return Settings()
