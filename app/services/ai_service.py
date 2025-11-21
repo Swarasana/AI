@@ -20,13 +20,12 @@ async def generate_summary_async(comments: List[str]) -> str:
         global _configured, _model
         if not _configured:
             from app.core.config import get_settings
+            from app.core.prompts import SUMMARIZER_SYSTEM_PROMPT
             s = get_settings()
             genai.configure(api_key=s.GEMINI_API_KEY)
             _model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
-                system_instruction=(
-                    "You are an empathetic museum assistant. Summarize the following visitor comments into a cohesive, emotional, and inclusive narrative in Indonesian. Avoid bullet points, make it flow like a story. Keep it under 150 words."
-                ),
+                system_instruction=SUMMARIZER_SYSTEM_PROMPT,
             )
             _configured = True
 

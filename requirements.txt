@@ -4,3 +4,6 @@ supabase
 google-generativeai
 python-dotenv
 pydantic-settings
+google-cloud-speech
+google-cloud-texttospeech
+python-multipart
