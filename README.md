@@ -69,6 +69,72 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 curl -X POST http://localhost:8000/api/v1/summarize/<collection_id>
 ```
 
+## Run with Docker
+
+### Prerequisites
+- Docker and Docker Compose installed
+- `.env` file with required environment variables
+
+### Quick Start
+
+1. **Create `.env` file** (if not exists):
+```bash
+SUPABASE_URL="<your-supabase-project-url>"
+SUPABASE_KEY="<your-supabase-anon-or-service-role-key>"
+GEMINI_API_KEY="<your-google-generativeai-api-key>"
+```
+
+2. **Build and run with Docker Compose:**
+```bash
+docker-compose up --build
+```
+
+3. **Run in detached mode (background):**
+```bash
+docker-compose up -d --build
+```
+
+4. **View logs:**
+```bash
+docker-compose logs -f
+```
+
+5. **Stop the service:**
+```bash
+docker-compose down
+```
+
+### Docker Commands
+
+**Build image only:**
+```bash
+docker build -t swarasana-ai:latest .
+```
+
+**Run container manually:**
+```bash
+docker run -d \
+  --name swarasana-ai \
+  -p 8000:8000 \
+  --env-file .env \
+  swarasana-ai:latest
+```
+
+**Check container status:**
+```bash
+docker ps
+docker logs swarasana-ai
+```
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` includes:
+- Automatic restart policy
+- Health checks
+- Environment variable management
+- Port mapping (8000:8000)
+- Network isolation
+
 ## Endpoint Behavior (Stale-While-Revalidate)
 - Reads `collections.ai_summary_text` and `collections.last_summary_generated_at`.
 - Reads latest `comments.created_at` for the collection.

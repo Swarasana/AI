@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+    swarasana-ai:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: swarasana-ai-service
+        ports:
+            - "8000:8000"
+        environment:
+            # Supabase Configuration
+            - SUPABASE_URL=${SUPABASE_URL}
+            - SUPABASE_KEY=${SUPABASE_KEY}
+            - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+            # Gemini API Configuration
+            - GEMINI_API_KEY=${GEMINI_API_KEY}
+        env_file:
+            - .env
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
+        networks:
+            - swarasana-network
+
+networks:
+    swarasana-network:
+        driver: bridge
