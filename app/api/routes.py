@@ -71,10 +71,45 @@ async def tts_endpoint(text: str = Form(...), lang: str = Form("id-ID"), voice: 
 
 
 @router.post("/stt")
-async def stt_endpoint(file: UploadFile = File(...), encoding: str = Form("LINEAR16"), sample_rate: int = Form(16000), lang: str = Form("id-ID")):
+async def stt_endpoint(
+    file: UploadFile = File(...), 
+    encoding: str | None = Form(None), 
+    sample_rate: int | None = Form(None), 
+    lang: str = Form("id-ID")
+):
     try:
         data = await file.read()
-        text = await transcribe_audio(content=data, encoding=encoding, sample_rate=sample_rate, lang=lang)
+        # Auto-detect format from filename
+        file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
+        
+        # Set default sample rate based on format
+        if sample_rate is None:
+            if file_ext in ["ogg", "opus"]:
+                sample_rate = 48000  # OGG Opus typically 48kHz
+            elif file_ext in ["mp3", "mpeg"]:
+                sample_rate = 44100  # MP3 typically 44.1kHz
+            else:
+                sample_rate = 48000  # Default for auto-detect
+        
+        # Auto-detect encoding based on file extension if not provided
+        encoding_param = None
+        if encoding and encoding.strip() != "" and encoding != "AUTO":
+            encoding_param = encoding
+        else:
+            # Auto-detect based on file extension for better compatibility
+            if file_ext in ["mp3", "mpeg"]:
+                encoding_param = "MP3"
+            elif file_ext in ["ogg", "opus"]:
+                # Use OGG_OPUS explicitly with sample_rate for better compatibility
+                encoding_param = "OGG_OPUS"
+                # Ensure sample_rate is set for OGG Opus (required by Google Cloud)
+                if sample_rate is None:
+                    sample_rate = 48000
+            elif file_ext in ["wav"]:
+                encoding_param = "LINEAR16"
+            # else: encoding_param stays None for ENCODING_UNSPECIFIED
+        
+        text = await transcribe_audio(content=data, encoding=encoding_param, sample_rate=sample_rate, lang=lang)
         return {"text": text}
     except AudioAIError as e:
         raise HTTPException(status_code=502, detail=str(e))

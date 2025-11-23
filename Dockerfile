@@ -26,6 +26,9 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Copy Google Cloud credentials
+COPY hms-fund-438007-ec9106f14570.json /app/hms-fund-438007-ec9106f14570.json
+
 # Expose port
 EXPOSE 8000
 
