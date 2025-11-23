@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str | None = None
     SUPABASE_ANON_KEY: str | None = None
     GEMINI_API_KEY: str
+    AI_SERVICE_API_KEY: str | None = None  # API key untuk autentikasi dari BE
 
     model_config = SettingsConfigDict(env_file=str(ENV_PATH), env_file_encoding="utf-8")
 

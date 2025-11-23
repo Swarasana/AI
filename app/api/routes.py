@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Dict
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi import UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 
@@ -14,20 +14,26 @@ from app.services.supabase_client import (
 )
 from app.services.ai_service import generate_summary_async, AIServiceError
 from app.services.audio_ai_service import synthesize_speech, transcribe_audio, AudioAIError
+from app.middleware.auth import verify_api_key
 
 
 router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/summarize/{collection_id}")
-async def summarize(collection_id: UUID) -> Dict[str, str]:
+async def summarize(
+    collection_id: UUID,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, str]:
     cid = str(collection_id)
     ai_summary_text, last_summary_generated_at = await fetch_collection_meta(cid)
     if ai_summary_text is None and last_summary_generated_at is None:
         raise HTTPException(status_code=404, detail="Collection not found")
 
     max_comment_ts = await fetch_latest_comment_ts(cid)
-    if ai_summary_text and last_summary_generated_at and (
+    # Check if summary exists and is not empty, and is fresh
+    has_valid_summary = ai_summary_text and ai_summary_text.strip() != ""
+    if has_valid_summary and last_summary_generated_at and (
         max_comment_ts is None or last_summary_generated_at > max_comment_ts
     ):
         return {"summary": ai_summary_text}
@@ -41,7 +47,15 @@ async def summarize(collection_id: UUID) -> Dict[str, str]:
     except AIServiceError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    await update_collection_summary(cid, summary)
+    # Update database with new summary
+    try:
+        await update_collection_summary(cid, summary)
+    except Exception as e:
+        # Log error but don't fail the request - summary is still returned
+        import logging
+        logging.error(f"Failed to update summary in database for {cid}: {str(e)}")
+        # Continue - summary is still valid even if DB update fails
+    
     return {"summary": summary}
 
 

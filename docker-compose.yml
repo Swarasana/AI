@@ -15,6 +15,8 @@ services:
             - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
             # Gemini API Configuration
             - GEMINI_API_KEY=${GEMINI_API_KEY}
+            # API Key for authentication (from BE)
+            - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
         env_file:
             - .env
         restart: unless-stopped
