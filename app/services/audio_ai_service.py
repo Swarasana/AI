@@ -10,8 +10,17 @@ class AudioAIError(Exception):
 
 
 async def synthesize_speech(
-    text: str, lang: str = "id-ID", voice: Optional[str] = None, ogg: bool = True
+    text: str,
+    lang: str = "id-ID",
+    voice: Optional[str] = None,
+    voice_type: Optional[str] = None,
+    ogg: bool = True,
 ) -> bytes:
+    """
+    Synthesize speech with support for voice types:
+    - voice_type: "male", "female", "child" (optional)
+    - voice: specific voice name (overrides voice_type if provided)
+    """
     try:
 
         def _run() -> bytes:
@@ -28,25 +37,41 @@ async def synthesize_speech(
 
             client = tts.TextToSpeechClient()
 
+            # Voice selection logic
+            selected_voice = voice
+            pitch_adjustment = "+2st"  # Default pitch adjustment
+            rate_adjustment = "1.1"  # Default rate (slightly faster)
+
+            if not selected_voice:
+                # Auto-select voice based on voice_type
+                if lang.startswith("id"):
+                    # Indonesian voices
+                    voice_type_lower = voice_type.lower() if voice_type else "female"
+                    if voice_type_lower == "male":
+                        selected_voice = "id-ID-Wavenet-B"  # Male voice
+                        pitch_adjustment = "+1st"  # Slightly lower pitch
+                    elif voice_type_lower == "child":
+                        selected_voice = "id-ID-Wavenet-A"  # Female voice base
+                        pitch_adjustment = (
+                            "+8st"  # Moderately high pitch for child-like voice
+                        )
+                        rate_adjustment = "1.0"  # Normal rate for clarity
+                    else:  # female or default
+                        selected_voice = "id-ID-Wavenet-A"  # Female voice
+                        pitch_adjustment = "+2st"
+                else:
+                    # For other languages, use default selection
+                    selected_voice = None
+
             # Use SSML for more natural speech with better prosody
-            # Rate: slightly faster (1.1x), pitch: more expressive, volume: normal
+            # Adjust pitch and rate based on voice type
             ssml_text = f"""<speak>
-                <prosody rate="1.1" pitch="+2st" volume="+0dB">
+                <prosody rate="{rate_adjustment}" pitch="{pitch_adjustment}" volume="+0dB">
                     {text}
                 </prosody>
             </speak>"""
 
             input_ = tts.SynthesisInput(ssml=ssml_text)
-
-            # Use Wavenet voice for better quality (more natural)
-            # Handle voice selection - use local variable to avoid scope issues
-            selected_voice = voice
-            if not selected_voice:
-                # Default to Wavenet-A for Indonesian (female, natural)
-                if lang.startswith("id"):
-                    selected_voice = "id-ID-Wavenet-A"
-                else:
-                    selected_voice = None
 
             voice_params = (
                 tts.VoiceSelectionParams(language_code=lang, name=selected_voice)

@@ -60,10 +60,23 @@ async def summarize(
 
 
 @router.post("/tts")
-async def tts_endpoint(text: str = Form(...), lang: str = Form("id-ID"), voice: str | None = Form(None), format_: str = Form("ogg")):
+async def tts_endpoint(
+    text: str = Form(...),
+    lang: str = Form("id-ID"),
+    voice: str | None = Form(None),
+    voice_type: str | None = Form(None),
+    format_: str = Form("ogg"),
+):
+    """
+    Text-to-Speech endpoint with voice type support:
+    - voice_type: "male", "female", "child" (optional, defaults to "female")
+    - voice: specific voice name (overrides voice_type if provided)
+    """
     try:
         ogg = format_.lower() == "ogg"
-        audio = await synthesize_speech(text=text, lang=lang, voice=voice, ogg=ogg)
+        audio = await synthesize_speech(
+            text=text, lang=lang, voice=voice, voice_type=voice_type, ogg=ogg
+        )
         media = "audio/ogg" if ogg else "audio/mpeg"
         return StreamingResponse(iter([audio]), media_type=media)
     except AudioAIError as e:
