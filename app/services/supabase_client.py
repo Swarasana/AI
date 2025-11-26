@@ -79,6 +79,29 @@ async def fetch_collection_meta(
     return data.get("ai_summary_text"), _parse_ts(data.get("last_summary_generated_at"))
 
 
+async def fetch_collection_context(
+    collection_id: str,
+) -> Optional[dict[str, str]]:
+    """Fetch collection context (name, artist_explanation) for AI summarization"""
+    client = await get_client()
+    resp = await (
+        client.table("collections")
+        .select("name,artist_explanation")
+        .eq("id", collection_id)
+        .maybe_single()
+        .execute()
+    )
+    if not resp or not hasattr(resp, "data") or resp.data is None:
+        return None
+    data: Optional[dict[str, Any]] = resp.data if isinstance(resp.data, dict) else None
+    if not data:
+        return None
+    return {
+        "name": data.get("name", ""),
+        "artist_explanation": data.get("artist_explanation", ""),
+    }
+
+
 async def fetch_latest_comment_ts(collection_id: str) -> Optional[datetime]:
     client = await get_client()
     resp = await (
@@ -93,6 +116,50 @@ async def fetch_latest_comment_ts(collection_id: str) -> Optional[datetime]:
     if not rows:
         return None
     return _parse_ts(rows[0].get("created_at"))
+
+
+async def fetch_comment_count(collection_id: str) -> int:
+    """Count total comments for a collection"""
+    client = await get_client()
+    # Use head=True to only get count without data
+    resp = await (
+        client.table("comments")
+        .select("*", count="exact", head=True)
+        .eq("collection_id", collection_id)
+        .execute()
+    )
+    # Supabase returns count in the response
+    if hasattr(resp, "count") and resp.count is not None:
+        return resp.count
+    # Fallback: fetch all IDs and count (less efficient but works)
+    fallback_resp = await (
+        client.table("comments")
+        .select("id")
+        .eq("collection_id", collection_id)
+        .execute()
+    )
+    rows = fallback_resp.data if isinstance(fallback_resp.data, list) else []
+    return len(rows)
+
+
+async def fetch_new_comments_after_timestamp(
+    collection_id: str, after_timestamp: datetime, limit: int = 50
+) -> list[str]:
+    """Fetch comments created after a specific timestamp"""
+    client = await get_client()
+    # Format timestamp for Supabase query
+    timestamp_str = after_timestamp.isoformat()
+    resp = await (
+        client.table("comments")
+        .select("comment_text,created_at")
+        .eq("collection_id", collection_id)
+        .gt("created_at", timestamp_str)
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    rows = resp.data if isinstance(resp.data, list) else []
+    return [r.get("comment_text", "") for r in rows if r.get("comment_text")]
 
 
 async def fetch_latest_comments(collection_id: str, limit: int = 50) -> list[str]:

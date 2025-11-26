@@ -8,11 +8,18 @@ from fastapi.responses import StreamingResponse
 
 from app.services.supabase_client import (
     fetch_collection_meta,
+    fetch_collection_context,
     fetch_latest_comment_ts,
     fetch_latest_comments,
+    fetch_comment_count,
+    fetch_new_comments_after_timestamp,
     update_collection_summary,
 )
-from app.services.ai_service import generate_summary_async, AIServiceError
+from app.services.ai_service import (
+    generate_summary_async,
+    generate_incremental_summary_async,
+    AIServiceError,
+)
 from app.services.audio_ai_service import synthesize_speech, transcribe_audio, AudioAIError
 from app.middleware.auth import verify_api_key
 
@@ -30,33 +37,71 @@ async def summarize(
     if ai_summary_text is None and last_summary_generated_at is None:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    max_comment_ts = await fetch_latest_comment_ts(cid)
-    # Check if summary exists and is not empty, and is fresh
+    # Check if summary is empty (None or empty string)
     has_valid_summary = ai_summary_text and ai_summary_text.strip() != ""
-    if has_valid_summary and last_summary_generated_at and (
-        max_comment_ts is None or last_summary_generated_at > max_comment_ts
-    ):
-        return {"summary": ai_summary_text}
 
-    comments = await fetch_latest_comments(cid, limit=50)
-    if len(comments) < 3:
-        return {"summary": "Belum cukup data untuk merangkum."}
+    if not has_valid_summary:
+        # Summary kosong: cek apakah sudah ada minimal 3 komentar
+        comment_count = await fetch_comment_count(cid)
+        if comment_count < 3:
+            # Belum cukup komentar, return empty string
+            return {"summary": ""}
+        
+        # Sudah ada minimal 3 komentar, generate summary dari semua komentar
+        comments = await fetch_latest_comments(cid, limit=50)
+        if len(comments) < 3:
+            return {"summary": ""}
+        
+        # Fetch collection context untuk memberikan konteks kurator
+        collection_context = await fetch_collection_context(cid)
+        
+        try:
+            summary = await generate_summary_async(comments, collection_context)
+        except AIServiceError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
-    try:
-        summary = await generate_summary_async(comments)
-    except AIServiceError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        # Update database with new summary
+        try:
+            await update_collection_summary(cid, summary)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to update summary in database for {cid}: {str(e)}")
+        
+        return {"summary": summary}
+    else:
+        # Summary sudah ada: ambil summary lama + komentar baru setelah last_summary_generated_at
+        if not last_summary_generated_at:
+            # Jika tidak ada timestamp, return summary yang ada
+            return {"summary": ai_summary_text}
+        
+        # Ambil komentar baru setelah summary terakhir digenerate
+        new_comments = await fetch_new_comments_after_timestamp(
+            cid, last_summary_generated_at, limit=50
+        )
+        
+        if not new_comments:
+            # Tidak ada komentar baru, return summary lama
+            return {"summary": ai_summary_text}
+        
+        # Ada komentar baru, summarize ulang dengan menggabungkan summary lama + komentar baru
+        # Fetch collection context untuk memberikan konteks kurator
+        collection_context = await fetch_collection_context(cid)
+        
+        try:
+            updated_summary = await generate_incremental_summary_async(
+                ai_summary_text, new_comments, collection_context
+            )
+        except AIServiceError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
-    # Update database with new summary
-    try:
-        await update_collection_summary(cid, summary)
-    except Exception as e:
-        # Log error but don't fail the request - summary is still returned
-        import logging
-        logging.error(f"Failed to update summary in database for {cid}: {str(e)}")
-        # Continue - summary is still valid even if DB update fails
-    
-    return {"summary": summary}
+        # Update database with updated summary
+        try:
+            await update_collection_summary(cid, updated_summary)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to update summary in database for {cid}: {str(e)}")
+        
+        return {"summary": updated_summary}
 
 
 @router.post("/tts")
